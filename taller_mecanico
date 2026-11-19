@@ -1,0 +1,462 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import mysql.connector
+
+# ==========================================
+# CONEXIÓN A BASE DE DATOS
+# ==========================================
+def conectar_db():
+    try:
+        return mysql.connector.connect(
+            host="localhost", user="root", password="", database="taller_automotriz"
+        )
+    except mysql.connector.Error as error:
+        messagebox.showerror("Error", f"No se pudo conectar a la base de datos:\n{error}")
+        return None
+
+# ==========================================
+# ESTILOS PARA BOTONES
+# ==========================================
+# Configuraciones base para que los botones se vean limpios sin ser excesivos
+BTN_NORMAL = {"font": ("Arial", 10), "fg": "white", "bg": "#34495e", "relief": "flat", "cursor": "hand2", "width": 12}
+BTN_ACCION = {"font": ("Arial", 10, "bold"), "fg": "white", "bg": "#27ae60", "relief": "flat", "cursor": "hand2", "width": 12}
+BTN_PELIGRO = {"font": ("Arial", 10), "fg": "white", "bg": "#e74c3c", "relief": "flat", "cursor": "hand2", "width": 12}
+COLOR_FONDO = "#f4f6f9"
+
+# ==========================================
+# CLASE BASE (Diseño estructurado y limpio)
+# ==========================================
+class VistaBase(tk.Frame):
+    def __init__(self, parent, app, titulo, texto_busqueda="Buscar por ID:"):
+        super().__init__(parent, bg=COLOR_FONDO)
+        self.app = app 
+        self.entradas = {}
+        
+        # 1. Título (Encabezado)
+        header = tk.Label(self, text=titulo, bg="#2c3e50", fg="white", font=("Arial", 16, "bold"), pady=15)
+        header.pack(fill="x")
+        
+        # 2. Área de Búsqueda (Caja agrupada)
+        frame_busqueda = tk.LabelFrame(self, text=" Búsqueda de Registros ", bg=COLOR_FONDO, font=("Arial", 10, "bold"), fg="#2c3e50", padx=15, pady=10)
+        frame_busqueda.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(frame_busqueda, text=texto_busqueda, bg=COLOR_FONDO, font=("Arial", 10)).pack(side="left", padx=5)
+        self.entry_busqueda = ttk.Entry(frame_busqueda, width=25, font=("Arial", 10))
+        self.entry_busqueda.pack(side="left", padx=10)
+        
+        self.btn_buscar = tk.Button(frame_busqueda, text="🔍 Buscar", command=self.accion_buscar, **BTN_NORMAL)
+        self.btn_buscar.pack(side="left", padx=5)
+        
+        # 3. Área del Formulario (Caja agrupada)
+        self.frame_formulario = tk.LabelFrame(self, text=" Datos del Registro ", bg=COLOR_FONDO, font=("Arial", 10, "bold"), fg="#2c3e50", padx=15, pady=15)
+        self.frame_formulario.pack(fill="both", expand=True, padx=20, pady=5)
+
+        # 4. Área de Botones Inferiores
+        self.frame_botones = tk.Frame(self, bg=COLOR_FONDO)
+        self.frame_botones.pack(pady=15)
+
+    def crear_botones(self):
+        self.btn_nuevo = tk.Button(self.frame_botones, text="➕ Nuevo", command=self.accion_nuevo, **BTN_NORMAL)
+        self.btn_nuevo.pack(side="left", padx=5)
+
+        self.btn_guardar = tk.Button(self.frame_botones, text="💾 Guardar", command=self.accion_guardar, **BTN_ACCION)
+        self.btn_guardar.pack(side="left", padx=5)
+
+        self.btn_editar = tk.Button(self.frame_botones, text="✏️ Editar", command=self.accion_editar, **BTN_NORMAL)
+        self.btn_editar.pack(side="left", padx=5)
+
+        self.btn_remover = tk.Button(self.frame_botones, text="🗑️ Remover", command=self.accion_remover, **BTN_PELIGRO)
+        self.btn_remover.pack(side="left", padx=5)
+        
+        self.btn_cancelar = tk.Button(self.frame_botones, text="✖️ Cancelar", command=self.accion_cancelar, **BTN_PELIGRO)
+        self.btn_cancelar.pack(side="left", padx=5)
+        
+        self.estado_inicial()
+
+    def alternar_campos(self, estado):
+        estado_tk = "normal" if estado else "disabled"
+        for campo, widget in self.entradas.items():
+            if campo not in ["ID", "Usuario (Atiende)"]: 
+                widget.config(state=estado_tk)
+
+    def limpiar_campos(self):
+        for campo, widget in self.entradas.items():
+            if campo != "Usuario (Atiende)": 
+                widget.config(state="normal")
+                if isinstance(widget, ttk.Entry) or isinstance(widget, tk.Entry):
+                    widget.delete(0, tk.END)
+                elif isinstance(widget, ttk.Combobox):
+                    widget.set('')
+        self.alternar_campos(False)
+
+    def estado_inicial(self):
+        self.limpiar_campos()
+        self.entry_busqueda.config(state="normal")
+        self.entry_busqueda.delete(0, tk.END)
+        self.btn_buscar.config(state="normal")
+
+        self.btn_nuevo.config(state="normal")
+        self.btn_guardar.config(state="disabled")
+        self.btn_cancelar.config(state="disabled")
+        self.btn_editar.config(state="disabled")
+        self.btn_remover.config(state="disabled")
+        
+        if "ID" in self.entradas: self.entradas["ID"].config(state="readonly")
+        if "Matricula" in self.entradas: self.entradas["Matricula"].config(state="disabled")
+
+    def accion_nuevo(self):
+        self.limpiar_campos()
+        self.alternar_campos(True) 
+        
+        self.entry_busqueda.config(state="disabled")
+        self.btn_buscar.config(state="disabled")
+        
+        if "ID" in self.entradas:
+            self.entradas["ID"].config(state="normal")
+            self.entradas["ID"].insert(0, "Automático")
+            self.entradas["ID"].config(state="readonly")
+            
+        if "Matricula" in self.entradas:
+            self.entradas["Matricula"].config(state="normal")
+
+        self.btn_nuevo.config(state="disabled")
+        self.btn_guardar.config(state="normal") 
+        self.btn_cancelar.config(state="normal")
+        self.btn_editar.config(state="disabled")
+        self.btn_remover.config(state="disabled")
+
+    def estado_post_busqueda(self):
+        self.entry_busqueda.config(state="disabled")
+        self.btn_buscar.config(state="disabled")
+        
+        if "ID" in self.entradas: self.entradas["ID"].config(state="readonly")
+        if "Matricula" in self.entradas: self.entradas["Matricula"].config(state="readonly")
+            
+        self.btn_nuevo.config(state="disabled")
+        self.btn_guardar.config(state="disabled")
+        self.btn_cancelar.config(state="normal")
+        self.btn_editar.config(state="normal")
+        self.btn_remover.config(state="normal")
+
+    def accion_cancelar(self):
+        self.estado_inicial()
+
+    def accion_editar(self):
+        self.alternar_campos(True)
+        if "Matricula" in self.entradas:
+            self.entradas["Matricula"].config(state="readonly") 
+            
+        self.btn_editar.config(state="disabled")
+        self.btn_remover.config(state="disabled")
+        self.btn_guardar.config(state="normal")
+
+    def rellenar_datos(self, campos_ordenados, datos):
+        self.alternar_campos(True)
+        if "ID" in self.entradas: self.entradas["ID"].config(state="normal")
+        if "Matricula" in self.entradas: self.entradas["Matricula"].config(state="normal")
+        
+        for campo, valor in zip(campos_ordenados, datos):
+            if campo in self.entradas:
+                self.entradas[campo].delete(0, tk.END)
+                self.entradas[campo].insert(0, str(valor))
+                if isinstance(self.entradas[campo], ttk.Combobox):
+                    self.entradas[campo].set(str(valor))
+                    
+        self.alternar_campos(False)
+        self.estado_post_busqueda()
+
+    def accion_buscar(self): pass 
+    def accion_guardar(self): pass
+    def accion_remover(self): pass
+
+
+# ==========================================
+# MÓDULOS ESPECÍFICOS
+# ==========================================
+class VistaUsuarios(VistaBase):
+    def __init__(self, parent, app):
+        super().__init__(parent, app, "Gestión de Usuarios", "Buscar por ID numérico:")
+        self.crear_widgets()
+
+    def crear_widgets(self):
+        campos = ["ID", "Nombre", "Username", "Password", "Telefono", "Email"]
+        for i, campo in enumerate(campos):
+            tk.Label(self.frame_formulario, text=campo+":", bg=COLOR_FONDO, font=("Arial", 10)).grid(row=i, column=0, pady=8, padx=15, sticky="e")
+            entry = ttk.Entry(self.frame_formulario, width=45)
+            entry.grid(row=i, column=1, pady=8, sticky="w")
+            self.entradas[campo] = entry
+
+        tk.Label(self.frame_formulario, text="Perfil:", bg=COLOR_FONDO, font=("Arial", 10)).grid(row=len(campos), column=0, pady=8, padx=15, sticky="e")
+        self.combo_perfil = ttk.Combobox(self.frame_formulario, values=["Administrador", "Mecanico", "Auxiliar"], width=42, state="readonly")
+        self.combo_perfil.grid(row=len(campos), column=1, pady=8, sticky="w")
+        self.entradas["Perfil"] = self.combo_perfil
+
+        self.crear_botones()
+
+    def accion_buscar(self):
+        id_busqueda = self.entry_busqueda.get()
+        if not id_busqueda.isdigit(): 
+            messagebox.showwarning("Aviso", "Por favor ingrese un ID numérico válido.")
+            return
+        
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT usuario_id, nombre, username, password, telefono, email, perfil FROM usuarios WHERE usuario_id = %s", (id_busqueda,))
+            resultado = cursor.fetchone()
+            conexion.close()
+            
+            if resultado:
+                self.rellenar_datos(["ID", "Nombre", "Username", "Password", "Telefono", "Email", "Perfil"], resultado)
+            else:
+                messagebox.showinfo("Búsqueda", "No se encontró ningún usuario con ese ID.")
+
+    def accion_guardar(self):
+        datos = [self.entradas[c].get() for c in ["Nombre", "Username", "Password", "Perfil", "Telefono", "Email"]]
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            try:
+                cursor.execute("INSERT INTO usuarios (nombre, username, password, perfil, telefono, email) VALUES (%s, %s, %s, %s, %s, %s)", datos)
+                conexion.commit()
+                messagebox.showinfo("Éxito", f"Usuario registrado correctamente con el ID: {cursor.lastrowid}")
+            except Exception as e:
+                messagebox.showerror("Error de Base de Datos", str(e))
+            finally:
+                conexion.close()
+        self.estado_inicial()
+
+
+class VistaClientes(VistaBase):
+    def __init__(self, parent, app):
+        super().__init__(parent, app, "Gestión de Clientes", "Buscar por ID numérico:")
+        self.crear_widgets()
+
+    def crear_widgets(self):
+        campos = ["ID", "RFC", "Nombre", "Telefono", "Email"]
+        for i, campo in enumerate(campos):
+            tk.Label(self.frame_formulario, text=campo+":", bg=COLOR_FONDO, font=("Arial", 10)).grid(row=i, column=0, pady=8, padx=15, sticky="e")
+            entry = ttk.Entry(self.frame_formulario, width=45)
+            entry.grid(row=i, column=1, pady=8, sticky="w")
+            self.entradas[campo] = entry
+
+        tk.Label(self.frame_formulario, text="Usuario que atiende:", bg=COLOR_FONDO, font=("Arial", 10, "italic")).grid(row=len(campos), column=0, pady=8, padx=15, sticky="e")
+        entry_user = ttk.Entry(self.frame_formulario, width=45)
+        entry_user.insert(0, f"{self.app.id_usuario} - {self.app.nombre_usuario}")
+        entry_user.config(state="readonly") 
+        entry_user.grid(row=len(campos), column=1, pady=8, sticky="w")
+        self.entradas["Usuario (Atiende)"] = entry_user
+
+        self.crear_botones()
+
+    def accion_buscar(self):
+        id_busqueda = self.entry_busqueda.get()
+        if not id_busqueda.isdigit(): 
+            messagebox.showwarning("Aviso", "Por favor ingrese un ID numérico válido.")
+            return
+        
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            query = """SELECT c.cliente_id, c.rfc, c.nombre, c.telefono, c.email, CONCAT(u.usuario_id, ' - ', u.nombre) 
+                       FROM clientes c JOIN usuarios u ON c.usuario_id = u.usuario_id WHERE c.cliente_id = %s"""
+            cursor.execute(query, (id_busqueda,))
+            resultado = cursor.fetchone()
+            conexion.close()
+            
+            if resultado:
+                self.entradas["Usuario (Atiende)"].config(state="normal")
+                self.rellenar_datos(["ID", "RFC", "Nombre", "Telefono", "Email", "Usuario (Atiende)"], resultado)
+                self.entradas["Usuario (Atiende)"].config(state="readonly")
+            else:
+                messagebox.showinfo("Búsqueda", "No se encontró ningún cliente con ese ID.")
+
+    def accion_guardar(self):
+        datos = [self.entradas[c].get() for c in ["RFC", "Nombre", "Telefono", "Email"]]
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            try:
+                cursor.execute("INSERT INTO clientes (rfc, nombre, telefono, email, usuario_id) VALUES (%s, %s, %s, %s, %s)", (*datos, self.app.id_usuario))
+                conexion.commit()
+                messagebox.showinfo("Éxito", f"Cliente registrado correctamente con el ID: {cursor.lastrowid}")
+            except Exception as e:
+                messagebox.showerror("Error de Base de Datos", str(e))
+            finally:
+                conexion.close()
+        self.estado_inicial()
+
+
+class VistaVehiculos(VistaBase):
+    def __init__(self, parent, app):
+        super().__init__(parent, app, "Gestión de Vehículos", "Buscar por Matrícula:")
+        self.crear_widgets()
+        self.cargar_clientes()
+
+    def crear_widgets(self):
+        campos = ["Matricula", "Marca", "Modelo", "Año", "Color", "Kilometros"]
+        for i, campo in enumerate(campos):
+            tk.Label(self.frame_formulario, text=campo+":", bg=COLOR_FONDO, font=("Arial", 10)).grid(row=i, column=0, pady=8, padx=15, sticky="e")
+            entry = ttk.Entry(self.frame_formulario, width=45)
+            entry.grid(row=i, column=1, pady=8, sticky="w")
+            self.entradas[campo] = entry
+
+        tk.Label(self.frame_formulario, text="Cliente (Dueño):", bg=COLOR_FONDO, font=("Arial", 10, "bold")).grid(row=len(campos), column=0, pady=8, padx=15, sticky="e")
+        self.combo_clientes = ttk.Combobox(self.frame_formulario, width=42, state="readonly")
+        self.combo_clientes.grid(row=len(campos), column=1, pady=8, sticky="w")
+        self.entradas["ClienteID"] = self.combo_clientes
+
+        self.crear_botones()
+
+    def cargar_clientes(self):
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT cliente_id, nombre FROM clientes")
+            clientes = cursor.fetchall()
+            self.combo_clientes['values'] = [f"{c[0]} - {c[1]}" for c in clientes]
+            conexion.close()
+
+    def accion_buscar(self):
+        matricula = self.entry_busqueda.get()
+        if not matricula: 
+            messagebox.showwarning("Aviso", "Ingrese la matrícula a buscar.")
+            return
+        
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            query = """SELECT v.matricula, v.marca, v.modelo, v.año, v.color, v.kilometros, CONCAT(c.cliente_id, ' - ', c.nombre) 
+                       FROM vehiculos v JOIN clientes c ON v.cliente_id = c.cliente_id WHERE v.matricula = %s"""
+            cursor.execute(query, (matricula,))
+            resultado = cursor.fetchone()
+            conexion.close()
+            
+            if resultado:
+                self.rellenar_datos(["Matricula", "Marca", "Modelo", "Año", "Color", "Kilometros", "ClienteID"], resultado)
+            else:
+                messagebox.showinfo("Búsqueda", "No se encontró ningún vehículo con esa matrícula.")
+
+    def accion_guardar(self):
+        datos = [self.entradas[c].get() for c in ["Matricula", "Marca", "Modelo", "Año", "Color", "Kilometros"]]
+        cliente_sel = self.entradas["ClienteID"].get()
+        id_cliente = cliente_sel.split(" - ")[0] if cliente_sel else None
+
+        conexion = conectar_db()
+        if conexion and id_cliente:
+            cursor = conexion.cursor()
+            try:
+                cursor.execute("INSERT INTO vehiculos (matricula, marca, modelo, año, color, kilometros, cliente_id) VALUES (%s, %s, %s, %s, %s, %s, %s)", (*datos, id_cliente))
+                conexion.commit()
+                messagebox.showinfo("Éxito", "Vehículo registrado exitosamente.")
+            except Exception as e:
+                messagebox.showerror("Error de Base de Datos", str(e))
+            finally:
+                conexion.close()
+        self.estado_inicial()
+
+# ==========================================
+# APLICACIÓN PRINCIPAL Y LOGIN
+# ==========================================
+class AplicacionPrincipal(tk.Tk):
+    def __init__(self, id_usuario, perfil_usuario, nombre_usuario):
+        super().__init__()
+        self.id_usuario = id_usuario
+        self.perfil_usuario = perfil_usuario
+        self.nombre_usuario = nombre_usuario
+        
+        self.title(f"Sistema Taller Automotriz | Perfil: {perfil_usuario} - {nombre_usuario}")
+        self.geometry("700x650")
+        self.configure(bg=COLOR_FONDO)
+        
+        # Aplicar un estilo moderno a los widgets ttk nativos
+        style = ttk.Style()
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+            
+        self.contenedor = tk.Frame(self, bg=COLOR_FONDO)
+        self.contenedor.pack(fill="both", expand=True)
+        self.vista_actual = None
+        self.crear_menu()
+        
+        # Pantalla de bienvenida
+        pantalla_inicio = tk.Frame(self.contenedor, bg=COLOR_FONDO)
+        pantalla_inicio.pack(expand=True)
+        tk.Label(pantalla_inicio, text="🚗 Bienvenido al Sistema del Taller", bg=COLOR_FONDO, fg="#2c3e50", font=("Arial", 18, "bold")).pack(pady=20)
+        tk.Label(pantalla_inicio, text="Seleccione un módulo en el menú superior para comenzar", bg=COLOR_FONDO, fg="#7f8c8d", font=("Arial", 12)).pack()
+
+    def crear_menu(self):
+        barra_menu = tk.Menu(self)
+        self.config(menu=barra_menu)
+        
+        menu_modulos = tk.Menu(barra_menu, tearoff=0)
+        barra_menu.add_cascade(label="Módulos del Sistema", menu=menu_modulos)
+
+        if self.perfil_usuario == "Administrador":
+            menu_modulos.add_command(label="👥 Gestión de Usuarios", command=lambda: self.mostrar_vista(VistaUsuarios))
+            menu_modulos.add_command(label="👤 Gestión de Clientes", command=lambda: self.mostrar_vista(VistaClientes))
+            menu_modulos.add_command(label="🚙 Gestión de Vehículos", command=lambda: self.mostrar_vista(VistaVehiculos))
+        elif self.perfil_usuario == "Mecanico":
+            menu_modulos.add_command(label="🚙 Gestión de Vehículos", command=lambda: self.mostrar_vista(VistaVehiculos))
+        elif self.perfil_usuario == "Auxiliar":
+            menu_modulos.add_command(label="👤 Gestión de Clientes", command=lambda: self.mostrar_vista(VistaClientes))
+            menu_modulos.add_command(label="🚙 Gestión de Vehículos", command=lambda: self.mostrar_vista(VistaVehiculos))
+
+        menu_modulos.add_separator()
+        menu_modulos.add_command(label="Cerrar Sesión", command=self.cerrar_sesion)
+
+    def mostrar_vista(self, clase_vista):
+        if self.vista_actual:
+            self.vista_actual.destroy()
+        for widget in self.contenedor.winfo_children():
+            widget.destroy()
+        self.vista_actual = clase_vista(self.contenedor, self)
+        self.vista_actual.pack(fill="both", expand=True)
+
+    def cerrar_sesion(self):
+        self.destroy()
+        Login().mainloop()
+
+class Login(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Acceso al Sistema")
+        self.geometry("350x300")
+        self.configure(bg="#2c3e50")
+        self.resizable(False, False)
+
+        # Panel blanco interno para dar efecto de "tarjeta"
+        panel = tk.Frame(self, bg="white", padx=20, pady=20)
+        panel.pack(expand=True, fill="both", padx=20, pady=20)
+
+        tk.Label(panel, text="TALLER AUTOMOTRIZ", bg="white", fg="#2c3e50", font=("Arial", 14, "bold")).pack(pady=(0, 15))
+        
+        tk.Label(panel, text="Usuario:", bg="white", fg="#7f8c8d", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.txt_user = ttk.Entry(panel, width=30, font=("Arial", 11))
+        self.txt_user.pack(pady=(0, 10), ipady=3)
+        
+        tk.Label(panel, text="Contraseña:", bg="white", fg="#7f8c8d", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.txt_pass = ttk.Entry(panel, width=30, show="*", font=("Arial", 11))
+        self.txt_pass.pack(pady=(0, 15), ipady=3)
+        
+        tk.Button(panel, text="Ingresar", bg="#2980b9", fg="white", font=("Arial", 10, "bold"), relief="flat", cursor="hand2", command=self.verificar_login).pack(fill="x", pady=5, ipady=5)
+
+    def verificar_login(self):
+        user = self.txt_user.get()
+        pwd = self.txt_pass.get()
+        conexion = conectar_db()
+        if conexion:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT usuario_id, perfil, nombre FROM usuarios WHERE username = %s AND password = %s", (user, pwd))
+            resultado = cursor.fetchone()
+            conexion.close()
+            if resultado:
+                id_usuario, perfil, nombre = resultado
+                self.destroy()
+                app = AplicacionPrincipal(id_usuario, perfil, nombre)
+                app.mainloop()
+            else:
+                messagebox.showerror("Acceso Denegado", "El usuario o la contraseña son incorrectos.")
+
+if __name__ == "__main__":
+    Login().mainloop()
